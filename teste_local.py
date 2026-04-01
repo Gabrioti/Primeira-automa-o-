@@ -1,10 +1,9 @@
-#       python teste_local.py
-
+#                   python teste_local.py
 import sys
 import subprocess
 
 # ==========================================
-# AUTO-INSTALADOR DE BIBLIOTECAS
+# AUTO-INSTALADOR DE BIBLIOTECAS PYTHON
 # ==========================================
 def instalar_dependencias():
     pacotes = {
@@ -19,15 +18,14 @@ def instalar_dependencias():
         except ImportError:
             print(f"-> Biblioteca '{modulo}' não encontrada. Instalando automaticamente...")
             try:
-                # É o equivalente a digitar 'python -m pip install pacote' no terminal
                 subprocess.check_call([sys.executable, '-m', 'pip', 'install', pacote_pip])
                 print(f"-> '{modulo}' instalado com sucesso!\n")
             except Exception as e:
                 print(f"-> ERRO ao tentar instalar '{modulo}': {e}")
-                print("Por favor, instale manualmente.")
+                print("Por favor, instale manualmente no terminal.")
                 sys.exit(1) # Para o código se não conseguir instalar
 
-# Roda a verificação antes de qualquer coisa
+# Roda a verificação antes de tentar importar o resto
 instalar_dependencias()
 
 # ==========================================
@@ -186,17 +184,15 @@ def processar_todas_cnds():
 
                 # ---> REGRAS DA MUNICIPAL
                 elif origem == "Municipal":
-                    # 1. Tenta extrair o nome da cidade (Regex)
+                    # 1. Tenta extrair o nome da cidade (Regex) e formata com .title()
                     busca_nome_cidade = re.search(r'(?:PREFEITURA MUNICIPAL DE|MUNIC[ÍI]PIO DE)\s+([A-ZÁÀÂÃÉÈÊÍÏÓÒÔÕÚÙÛÇ ]+)', texto_do_pdf)
                     
                     if busca_nome_cidade:
-                        # Adicionamos o .title() no final para formatar como "Valparaiso De Goias"
                         cidade = busca_nome_cidade.group(1).split('\n')[0].strip().title()
                         print(f"-> Cidade detectada: {cidade}")
                     
                     if not cidade:
                         print(f"\n[!] Atenção: Não achei o nome da cidade no PDF: {nome_arquivo}")
-                        # Trocamos o .upper() por .title() aqui também
                         cidade = input("Por favor, digite o nome da cidade: ").strip().title()
 
                     # 2. Status
@@ -319,10 +315,13 @@ def processar_todas_cnds():
         # 3. RENOMEAR O ARQUIVO (Com verificador de duplicatas)
         # ==========================================
         
-        # Adiciona a cidade separada por um espaço, SEM parênteses
-        complemento_cidade = f" {cidade}" if origem == "Municipal" and cidade else ""
+        # Regra de nomeação: se for Municipal, mostra só a cidade. Senão, mostra a origem.
+        if origem == "Municipal" and cidade:
+            nome_origem = cidade
+        else:
+            nome_origem = origem
         
-        nome_base = f"{numero_categoria} - CND {origem}{complemento_cidade} - {status} - {data_atualizacao}"
+        nome_base = f"{numero_categoria} - CND {nome_origem} - {status} - {data_atualizacao}"
         nome_final = f"{nome_base}.pdf"
         
         contador = 1
