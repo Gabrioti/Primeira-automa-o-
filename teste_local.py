@@ -83,6 +83,11 @@ def processar_todas_cnds():
                 else:
                     texto_do_pdf = texto_do_pdf.upper()
 
+                # TEXTO DO OCR:
+                print("\n--- TEXTO EXTRAÍDO PELO OCR/PDF ---")
+                print(texto_do_pdf)
+                print("-----------------------------------\n")
+
                 # 2. Manda o texto pro Detetive descobrir qual é a CND
                 origem, numero_categoria = identificar_cnd(texto_do_pdf)
 
@@ -100,7 +105,8 @@ def processar_todas_cnds():
                 if origem == "Federal":
                     if "EFEITO DE NEGATIVA" in texto_do_pdf or "EFEITOS DE NEGATIVA" in texto_do_pdf:
                         status = "Positiva com Efeito Negativo"
-                    elif "NEGATIVA" in texto_do_pdf or "NÃO CONSTA" in texto_do_pdf:
+                    # Adicionado o NAO CONSTA sem acento
+                    elif "NEGATIVA" in texto_do_pdf or "NÃO CONSTA" in texto_do_pdf or "NAO CONSTA" in texto_do_pdf:
                         status = "Negativa"
                     elif "POSITIVA" in texto_do_pdf or "CONSTA" in texto_do_pdf:
                         status = "Positiva"
@@ -180,9 +186,10 @@ def processar_todas_cnds():
                     
                     # 3. PLANO B: Se não achou data por extenso, tenta achar com barras
                     if not data_encontrada:
-                        busca_validade_barras = re.search(r'VALIDADE.*?\s*(\d{2}/\d{2}/\d{4})', texto_do_pdf)
+                        # O (V[ÁA]LIDA AT[ÉE]|VALIDADE) aceita os dois padrões das prefeituras
+                        busca_validade_barras = re.search(r'(V[ÁA]LIDA AT[ÉE]|VALIDADE)[^\d]*(\d{2}/\d{2}/\d{4})', texto_do_pdf)
                         if busca_validade_barras:
-                            data_encontrada = busca_validade_barras.group(1)
+                            data_encontrada = busca_validade_barras.group(2) # Pegamos o grupo 2, que é a data
 
                 # ---> REGRAS DA TRABALHISTA
                 elif origem == "Trabalhista":
@@ -227,7 +234,8 @@ def processar_todas_cnds():
                 elif origem == "FGTS":
                     if "EFEITO DE NEGATIVA" in texto_do_pdf or "EFEITOS DE NEGATIVA" in texto_do_pdf:
                         status = "Positiva com Efeito Negativo"
-                    elif "SITUAÇÃO REGULAR" in texto_do_pdf:
+                    # Aceita com acento e sem acento
+                    elif "SITUAÇÃO REGULAR" in texto_do_pdf or "SITUACAO REGULAR" in texto_do_pdf:
                         status = "Negativa" 
                     else:
                         status = "Positiva"
@@ -238,15 +246,15 @@ def processar_todas_cnds():
 
                 # ---> REGRAS DA AGEHAB
                 elif origem == "AGEHAB":
-                    # 1. Status com "Escudo"
-                    if "CERTIDÃO POSITIVA DE DÉBITOS COM EFEITO NEGATIVO" in texto_do_pdf or "CERTIDÃO POSITIVA COM EFEITO DE NEGATIVA" in texto_do_pdf:
+                    # 1. Status com "Escudo" mais simples e seguro
+                    if "EFEITO DE NEGATIVA" in texto_do_pdf or "EFEITOS DE NEGATIVA" in texto_do_pdf:
                         status = "Positiva com Efeito Negativo"
-                    elif "CERTIDÃO NEGATIVA DE DÉBITOS" in texto_do_pdf:
+                    elif "NEGATIVA" in texto_do_pdf:
                         status = "Negativa"
-                    elif "CERTIDÃO POSITIVA DE DÉBITOS" in texto_do_pdf:
+                    elif "POSITIVA" in texto_do_pdf:
                         status = "Positiva"
 
-                    # 2. Busca a data de validade ignorando dois pontos e espaços
+                    # 2. Busca a data (Essa parte já estava funcionando perfeitamente!)
                     busca_validade = re.search(r'V[ÁA]LIDA AT[ÉE][^\d]*(\d{2}/\d{2}/\d{4})', texto_do_pdf)
                     if busca_validade:
                         data_encontrada = busca_validade.group(1)
