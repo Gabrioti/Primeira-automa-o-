@@ -1,6 +1,8 @@
-#                               python teste_local.py
+#       python teste_local.py
+
 import sys
 import subprocess
+
 # ==========================================
 # AUTO-INSTALADOR DE BIBLIOTECAS
 # ==========================================
@@ -27,6 +29,10 @@ def instalar_dependencias():
 
 # Roda a verificação antes de qualquer coisa
 instalar_dependencias()
+
+# ==========================================
+# AGORA SIM, OS IMPORTS DO SEU CÓDIGO
+# ==========================================
 import os
 import pdfplumber
 import re
@@ -35,10 +41,10 @@ import pytesseract
 from pdf2image import convert_from_path
 
 # ==========================================
-# 0. FUNÇÃO DE OCR (Para PDFs Fantasma)
+# 0. FUNÇÃO DE OCR (Para PDFs Fantasma e Fontes Corrompidas)
 # ==========================================
 def extrair_texto_com_ocr(caminho_pdf):
-    print("-> PDF imagem detectado. Acionando OCR (isso pode levar alguns segundos)...")
+    print("-> Fonte corrompida ou PDF imagem detectado. Acionando OCR (isso pode levar alguns segundos)...")
     texto_extraido = ""
     try:
         imagens = convert_from_path(caminho_pdf) 
@@ -99,23 +105,22 @@ def processar_todas_cnds():
         data_encontrada = None
         origem = None
         numero_categoria = None
+        cidade = "" # Inicializa a variável da cidade vazia
         
         try:
             with pdfplumber.open(caminho_atual) as pdf:
                 primeira_pagina = pdf.pages[0]
                 texto_do_pdf = primeira_pagina.extract_text()
                 
-                # Prepara o texto e conta quantas letras reais existem
+                # Prepara o texto e conta quantas letras reais existem para checar corrupção de fonte
                 if texto_do_pdf:
                     texto_do_pdf = texto_do_pdf.upper()
-                    # Conta quantas letras normais (A-Z) existem no que o pdfplumber leu
                     letras_normais = len(re.findall(r'[A-Z]', texto_do_pdf))
                 else:
                     letras_normais = 0
                 
-                # 1. Verifica se precisa de OCR (vazio, curto ou cheio de símbolos corrompidos)
+                # 1. Verifica se precisa de OCR (vazio, curto ou cheio de símbolos)
                 if not texto_do_pdf or len(texto_do_pdf.strip()) < 20 or letras_normais < 20:
-                    print("-> Fonte corrompida ou PDF imagem detectado. Acionando OCR...")
                     texto_do_pdf = extrair_texto_com_ocr(caminho_atual)
 
                 # 2. Manda o texto pro Detetive descobrir qual é a CND
@@ -135,7 +140,6 @@ def processar_todas_cnds():
                 if origem == "Federal":
                     if "EFEITO DE NEGATIVA" in texto_do_pdf or "EFEITOS DE NEGATIVA" in texto_do_pdf:
                         status = "Positiva com Efeito Negativo"
-                    # Adicionado o NAO CONSTA sem acento
                     elif "NEGATIVA" in texto_do_pdf or "NÃO CONSTA" in texto_do_pdf or "NAO CONSTA" in texto_do_pdf:
                         status = "Negativa"
                     elif "POSITIVA" in texto_do_pdf or "CONSTA" in texto_do_pdf:
@@ -182,44 +186,47 @@ def processar_todas_cnds():
 
                 # ---> REGRAS DA MUNICIPAL
                 elif origem == "Municipal":
-                    # 1. Status com "Escudo"
+                    # 1. Tenta extrair o nome da cidade (Regex)
+                    busca_nome_cidade = re.search(r'(?:PREFEITURA MUNICIPAL DE|MUNIC[ÍI]PIO DE)\s+([A-ZÁÀÂÃÉÈÊÍÏÓÒÔÕÚÙÛÇ ]+)', texto_do_pdf)
+                    
+                    if busca_nome_cidade:
+                        # Adicionamos o .title() no final para formatar como "Valparaiso De Goias"
+                        cidade = busca_nome_cidade.group(1).split('\n')[0].strip().title()
+                        print(f"-> Cidade detectada: {cidade}")
+                    
+                    if not cidade:
+                        print(f"\n[!] Atenção: Não achei o nome da cidade no PDF: {nome_arquivo}")
+                        # Trocamos o .upper() por .title() aqui também
+                        cidade = input("Por favor, digite o nome da cidade: ").strip().title()
+
+                    # 2. Status
                     if "EFEITO DE NEGATIVA" in texto_do_pdf or "EFEITOS DE NEGATIVA" in texto_do_pdf or "EFEITO NEGATIVO" in texto_do_pdf:
                         status = "Positiva com Efeito Negativo"
-                    elif "NEGATIVA" in texto_do_pdf or "NÃO CONSTA" in texto_do_pdf:
+                    elif "NEGATIVA" in texto_do_pdf or "NÃO CONSTA" in texto_do_pdf or "NAO CONSTA" in texto_do_pdf:
                         status = "Negativa"
                     elif "POSITIVA" in texto_do_pdf:
                         status = "Positiva"
                     
-                    # 2. Busca de data por extenso (Ex: VALIDADE ATÉ: SÁBADO 11 ABRIL 2026)
-                    # O [^\d]* ignora palavras como "ATÉ:" e "SÁBADO", indo direto pro número
+                    # 3. Busca de data por extenso
                     busca_emissao = re.search(r'VALIDADE[^\d]*(\d{1,2})\s+([A-ZÇ]+)[^\d]*(\d{4})', texto_do_pdf)
-                    
                     if busca_emissao:
                         dia = int(busca_emissao.group(1))
                         mes_texto = busca_emissao.group(2).replace("Ç", "C")
                         ano = int(busca_emissao.group(3))
-
-                        meses = {
-                            "JANEIRO": 1, "FEVEREIRO": 2, "MARCO": 3, "ABRIL": 4,
-                            "MAIO": 5, "JUNHO": 6, "JULHO": 7, "AGOSTO": 8, "SETEMBRO": 9,
-                            "OUTUBRO": 10, "NOVEMBRO": 11, "DEZEMBRO": 12
-                        }
+                        meses = {"JANEIRO": 1, "FEVEREIRO": 2, "MARCO": 3, "ABRIL": 4, "MAIO": 5, "JUNHO": 6, 
+                                 "JULHO": 7, "AGOSTO": 8, "SETEMBRO": 9, "OUTUBRO": 10, "NOVEMBRO": 11, "DEZEMBRO": 12}
                         mes_numero = meses.get(mes_texto)
-
                         if mes_numero:
                             try:
-                                # Monta a data e formata no padrão que o resto do código entende (DD/MM/YYYY)
                                 data_obj = datetime(ano, mes_numero, dia)
                                 data_encontrada = data_obj.strftime("%d/%m/%Y")
-                            except Exception as e:
-                                print(f"Aviso: Erro ao calcular a data Municipal: {e}")
+                            except: pass
                     
-                    # 3. PLANO B: Se não achou data por extenso, tenta achar com barras
+                    # 4. Plano B (Data com barras)
                     if not data_encontrada:
-                        # O (V[ÁA]LIDA AT[ÉE]|VALIDADE) aceita os dois padrões das prefeituras
                         busca_validade_barras = re.search(r'(V[ÁA]LIDA AT[ÉE]|VALIDADE)[^\d]*(\d{2}/\d{2}/\d{4})', texto_do_pdf)
                         if busca_validade_barras:
-                            data_encontrada = busca_validade_barras.group(2) # Pegamos o grupo 2, que é a data
+                            data_encontrada = busca_validade_barras.group(2)
 
                 # ---> REGRAS DA TRABALHISTA
                 elif origem == "Trabalhista":
@@ -264,7 +271,6 @@ def processar_todas_cnds():
                 elif origem == "FGTS":
                     if "EFEITO DE NEGATIVA" in texto_do_pdf or "EFEITOS DE NEGATIVA" in texto_do_pdf:
                         status = "Positiva com Efeito Negativo"
-                    # Aceita com acento e sem acento
                     elif "SITUAÇÃO REGULAR" in texto_do_pdf or "SITUACAO REGULAR" in texto_do_pdf:
                         status = "Negativa" 
                     else:
@@ -276,7 +282,6 @@ def processar_todas_cnds():
 
                 # ---> REGRAS DA AGEHAB
                 elif origem == "AGEHAB":
-                    # 1. Status com "Escudo" mais simples e seguro
                     if "EFEITO DE NEGATIVA" in texto_do_pdf or "EFEITOS DE NEGATIVA" in texto_do_pdf:
                         status = "Positiva com Efeito Negativo"
                     elif "NEGATIVA" in texto_do_pdf:
@@ -284,7 +289,6 @@ def processar_todas_cnds():
                     elif "POSITIVA" in texto_do_pdf:
                         status = "Positiva"
 
-                    # 2. Busca a data (Essa parte já estava funcionando perfeitamente!)
                     busca_validade = re.search(r'V[ÁA]LIDA AT[ÉE][^\d]*(\d{2}/\d{2}/\d{4})', texto_do_pdf)
                     if busca_validade:
                         data_encontrada = busca_validade.group(1)
@@ -314,7 +318,11 @@ def processar_todas_cnds():
         # ==========================================
         # 3. RENOMEAR O ARQUIVO (Com verificador de duplicatas)
         # ==========================================
-        nome_base = f"{numero_categoria} - CND {origem} - {status} - {data_atualizacao}"
+        
+        # Adiciona a cidade separada por um espaço, SEM parênteses
+        complemento_cidade = f" {cidade}" if origem == "Municipal" and cidade else ""
+        
+        nome_base = f"{numero_categoria} - CND {origem}{complemento_cidade} - {status} - {data_atualizacao}"
         nome_final = f"{nome_base}.pdf"
         
         contador = 1
@@ -334,8 +342,7 @@ def processar_todas_cnds():
     print("Automação concluída! Todos os PDFs possíveis foram processados.")
 
 # ==========================================
-# 3. GATILHO DE EXECUÇÃO
+# GATILHO DE EXECUÇÃO
 # ==========================================
 if __name__ == "__main__":
-    # Removemos o menu e chamamos direto a função de Auto-Detecção
     processar_todas_cnds()
