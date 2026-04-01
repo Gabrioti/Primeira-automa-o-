@@ -1,4 +1,32 @@
 #                               python teste_local.py
+import sys
+import subprocess
+# ==========================================
+# AUTO-INSTALADOR DE BIBLIOTECAS
+# ==========================================
+def instalar_dependencias():
+    pacotes = {
+        'pdfplumber': 'pdfplumber',
+        'pytesseract': 'pytesseract',
+        'pdf2image': 'pdf2image'
+    }
+    
+    for modulo, pacote_pip in pacotes.items():
+        try:
+            __import__(modulo)
+        except ImportError:
+            print(f"-> Biblioteca '{modulo}' não encontrada. Instalando automaticamente...")
+            try:
+                # É o equivalente a digitar 'python -m pip install pacote' no terminal
+                subprocess.check_call([sys.executable, '-m', 'pip', 'install', pacote_pip])
+                print(f"-> '{modulo}' instalado com sucesso!\n")
+            except Exception as e:
+                print(f"-> ERRO ao tentar instalar '{modulo}': {e}")
+                print("Por favor, instale manualmente.")
+                sys.exit(1) # Para o código se não conseguir instalar
+
+# Roda a verificação antes de qualquer coisa
+instalar_dependencias()
 import os
 import pdfplumber
 import re
