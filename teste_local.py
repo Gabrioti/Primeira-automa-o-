@@ -77,16 +77,18 @@ def processar_todas_cnds():
                 primeira_pagina = pdf.pages[0]
                 texto_do_pdf = primeira_pagina.extract_text()
                 
-                # 1. Verifica se precisa de OCR antes mesmo de saber a origem
-                if not texto_do_pdf or len(texto_do_pdf.strip()) < 20:
-                    texto_do_pdf = extrair_texto_com_ocr(caminho_atual)
-                else:
+                # Prepara o texto e conta quantas letras reais existem
+                if texto_do_pdf:
                     texto_do_pdf = texto_do_pdf.upper()
-
-                # TEXTO DO OCR:
-                print("\n--- TEXTO EXTRAÍDO PELO OCR/PDF ---")
-                print(texto_do_pdf)
-                print("-----------------------------------\n")
+                    # Conta quantas letras normais (A-Z) existem no que o pdfplumber leu
+                    letras_normais = len(re.findall(r'[A-Z]', texto_do_pdf))
+                else:
+                    letras_normais = 0
+                
+                # 1. Verifica se precisa de OCR (vazio, curto ou cheio de símbolos corrompidos)
+                if not texto_do_pdf or len(texto_do_pdf.strip()) < 20 or letras_normais < 20:
+                    print("-> Fonte corrompida ou PDF imagem detectado. Acionando OCR...")
+                    texto_do_pdf = extrair_texto_com_ocr(caminho_atual)
 
                 # 2. Manda o texto pro Detetive descobrir qual é a CND
                 origem, numero_categoria = identificar_cnd(texto_do_pdf)
