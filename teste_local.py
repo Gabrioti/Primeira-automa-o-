@@ -23,9 +23,8 @@ def instalar_dependencias():
             except Exception as e:
                 print(f"-> ERRO ao tentar instalar '{modulo}': {e}")
                 print("Por favor, instale manualmente no terminal.")
-                sys.exit(1) # Para o código se não conseguir instalar
+                sys.exit(1)
 
-# Roda a verificação antes de tentar importar o resto
 instalar_dependencias()
 
 # ==========================================
@@ -58,7 +57,6 @@ def extrair_texto_com_ocr(caminho_pdf):
 # 1. FUNÇÃO DETETIVE (Descobre a origem da CND)
 # ==========================================
 def identificar_cnd(texto):
-    """Lê o texto e retorna a Origem e o Número correspondente."""
     if "AGEHAB" in texto or "AGÊNCIA GOIANA DE HABITAÇÃO" in texto or "AGENCIA GOIANA DE HABITACAO" in texto:
         return "AGEHAB", "7"
     elif "FUNDO DE GARANTIA" in texto or "FGTS" in texto or "CAIXA ECONOMICA FEDERAL" in texto:
@@ -74,7 +72,7 @@ def identificar_cnd(texto):
     elif "RECEITA FEDERAL" in texto or "FAZENDA NACIONAL" in texto or "MINISTÉRIO DA FAZENDA" in texto:
         return "Federal", "1"
     
-    return None, None # Retorna vazio se não conseguir identificar
+    return None, None
 
 # ==========================================
 # 2. FUNÇÃO PRINCIPAL DE PROCESSAMENTO EM LOTE
@@ -90,7 +88,6 @@ def processar_todas_cnds():
     print(f"\nIniciando AUTO-DETECÇÃO em {len(arquivos_pdf)} arquivo(s) PDF...")
 
     for nome_arquivo in arquivos_pdf:
-        # Pula arquivos que já foram renomeados por esse script no formato "Numero - CND..."
         if re.match(r'^\d\s-\sCND', nome_arquivo):
             continue
 
@@ -103,25 +100,22 @@ def processar_todas_cnds():
         data_encontrada = None
         origem = None
         numero_categoria = None
-        cidade = "" # Inicializa a variável da cidade vazia
+        cidade = "" 
         
         try:
             with pdfplumber.open(caminho_atual) as pdf:
                 primeira_pagina = pdf.pages[0]
                 texto_do_pdf = primeira_pagina.extract_text()
                 
-                # Prepara o texto e conta quantas letras reais existem para checar corrupção de fonte
                 if texto_do_pdf:
                     texto_do_pdf = texto_do_pdf.upper()
                     letras_normais = len(re.findall(r'[A-Z]', texto_do_pdf))
                 else:
                     letras_normais = 0
                 
-                # 1. Verifica se precisa de OCR (vazio, curto ou cheio de símbolos)
                 if not texto_do_pdf or len(texto_do_pdf.strip()) < 20 or letras_normais < 20:
                     texto_do_pdf = extrair_texto_com_ocr(caminho_atual)
 
-                # 2. Manda o texto pro Detetive descobrir qual é a CND
                 origem, numero_categoria = identificar_cnd(texto_do_pdf)
 
                 if not origem:
@@ -131,7 +125,7 @@ def processar_todas_cnds():
                 print(f"-> Identificado como: CND {origem} (Categoria {numero_categoria})")
 
                 # ============================================================
-                # REGRAS DE LEITURA (Separadas por Origem)
+                # REGRAS DE LEITURA
                 # ============================================================
                 
                 # ---> REGRAS DA FEDERAL
@@ -166,34 +160,30 @@ def processar_todas_cnds():
                         dia = int(busca_emissao.group(1))
                         mes_texto = busca_emissao.group(2).replace("Ç", "C")
                         ano = int(busca_emissao.group(3))
-
-                        meses = {
-                            "JANEIRO": 1, "FEVEREIRO": 2, "MARCO": 3, "ABRIL": 4,
-                            "MAIO": 5, "JUNHO": 6, "JULHO": 7, "AGOSTO": 8, "SETEMBRO": 9,
-                            "OUTUBRO": 10, "NOVEMBRO": 11, "DEZEMBRO": 12
-                        }
+                        meses = {"JANEIRO": 1, "FEVEREIRO": 2, "MARCO": 3, "ABRIL": 4, "MAIO": 5, "JUNHO": 6, 
+                                 "JULHO": 7, "AGOSTO": 8, "SETEMBRO": 9, "OUTUBRO": 10, "NOVEMBRO": 11, "DEZEMBRO": 12}
                         mes_numero = meses.get(mes_texto)
-
                         if mes_numero:
                             try:
                                 data_emissao_obj = datetime(ano, mes_numero, dia)
                                 data_validade_obj = data_emissao_obj + timedelta(days=dias_validade)
                                 data_encontrada = data_validade_obj.strftime("%d/%m/%Y")
-                            except Exception as e:
-                                print(f"Aviso: Erro ao calcular a data Estadual: {e}")
+                            except: pass
 
                 # ---> REGRAS DA MUNICIPAL
                 elif origem == "Municipal":
-                    # 1. Tenta extrair o nome da cidade (Regex) e formata com .title()
+                    # 1. Tenta extrair o nome da cidade (Regex)
                     busca_nome_cidade = re.search(r'(?:PREFEITURA MUNICIPAL DE|MUNIC[ÍI]PIO DE)\s+([A-ZÁÀÂÃÉÈÊÍÏÓÒÔÕÚÙÛÇ ]+)', texto_do_pdf)
                     
                     if busca_nome_cidade:
-                        cidade = busca_nome_cidade.group(1).split('\n')[0].strip().title()
+                        cidade = busca_nome_cidade.group(1).split('\n')[0].strip()
+                        cidade = re.sub(r'(?i)\s+DE\s+GOI[ÁA]S$', '', cidade).title()
                         print(f"-> Cidade detectada: {cidade}")
                     
                     if not cidade:
                         print(f"\n[!] Atenção: Não achei o nome da cidade no PDF: {nome_arquivo}")
-                        cidade = input("Por favor, digite o nome da cidade: ").strip().title()
+                        cidade = input("Por favor, digite o nome da cidade: ").strip()
+                        cidade = re.sub(r'(?i)\s+DE\s+GOI[ÁA]S$', '', cidade).title()
 
                     # 2. Status
                     if "EFEITO DE NEGATIVA" in texto_do_pdf or "EFEITOS DE NEGATIVA" in texto_do_pdf or "EFEITO NEGATIVO" in texto_do_pdf:
@@ -290,7 +280,7 @@ def processar_todas_cnds():
                         data_encontrada = busca_validade.group(1)
 
                 # ============================================================
-                # FORMATAÇÃO DA DATA (Isso serve para TODAS as origens)
+                # FORMATAÇÃO DA DATA
                 # ============================================================
                 if not data_encontrada:
                     busca_data_solta = re.search(r'\d{2}[./]\d{2}[./]\d{2,4}', texto_do_pdf)
@@ -312,10 +302,8 @@ def processar_todas_cnds():
             continue
 
         # ==========================================
-        # 3. RENOMEAR O ARQUIVO (Com verificador de duplicatas)
+        # 3. RENOMEAR O ARQUIVO
         # ==========================================
-        
-        # Regra de nomeação: se for Municipal, mostra só a cidade. Senão, mostra a origem.
         if origem == "Municipal" and cidade:
             nome_origem = cidade
         else:
@@ -340,8 +328,5 @@ def processar_todas_cnds():
     print(f"\n{'-'*50}")
     print("Automação concluída! Todos os PDFs possíveis foram processados.")
 
-# ==========================================
-# GATILHO DE EXECUÇÃO
-# ==========================================
 if __name__ == "__main__":
     processar_todas_cnds()
